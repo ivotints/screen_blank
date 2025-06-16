@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 #
 # xxx — blank screen, press Super, start mouce.py; restore on Ctrl-C
 #
@@ -10,13 +10,13 @@ OUTPUT=$(xrandr | awk '/ connected/ { print $1; exit }')
 cleanup() {
   # stop mouse jiggle
   kill "$MOUSE_PID" 2>/dev/null || true
-  # restore GNOME backlight to 70%
+  # restore GNOME backlight to 100%
   gdbus call --session \
     --dest org.gnome.SettingsDaemon.Power \
     --object-path /org/gnome/SettingsDaemon/Power \
     --method org.freedesktop.DBus.Properties.Set \
       org.gnome.SettingsDaemon.Power.Screen \
-      Brightness "<int32 70>"
+      Brightness "<int32 100>"
   # restore xrandr brightness
   xrandr --output "$OUTPUT" --brightness 1
   exit
@@ -36,9 +36,10 @@ gdbus call --session \
 #  2) set xrandr brightness to 0
 xrandr --output "$OUTPUT" --brightness 0
 
+PWD=`pwd`
 # start your mouce.py in background
-python3 /home/ivotints/.bin/win_button.py
-python3 /home/ivotints/.bin/mouce.py &
+python3 $PWD/win_button.py
+python3 $PWD/mouce.py &
 MOUSE_PID=$!
 
 # wait here until Ctrl-C
