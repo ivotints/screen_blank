@@ -6,6 +6,10 @@
 # detect the first connected output (change if you need a specific one)
 OUTPUT=$(xrandr | awk '/ connected/ { print $1; exit }')
 
+xset s off           # turn off screen saver
+xset s noblank       # don’t blank the video device
+xset -dpms           # disable DPMS (energy star) features
+
 # function to restore brightness and kill mouse script
 cleanup() {
   # stop mouse jiggle
