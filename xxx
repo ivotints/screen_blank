@@ -1,19 +1,35 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 #
-# xxx — blank screen, press Super, start mouce.py; restore on Ctrl-C
+# blank-session.sh — inhibit idle/sleep, blank screen, press Super, start mouce.py; restore on Ctrl-C
 #
+
+# If not already under systemd-inhibit, re-exec ourselves under it
+if [ -z "$UNDER_INHIBIT" ]; then
+  export UNDER_INHIBIT=1
+  exec systemd-inhibit \
+    --what=idle:sleep:handle-lid-switch \
+    --mode=block \
+    --why="Blank screen without lock for interactive session" \
+    "$0" "$@"
+fi
 
 # detect the first connected output (change if you need a specific one)
 OUTPUT=$(xrandr | awk '/ connected/ { print $1; exit }')
 
-xset s off           # turn off screen saver
-xset s noblank       # don’t blank the video device
-xset -dpms           # disable DPMS (energy star) features
+# Turn off any automatic blanking/DPMS on X11
+xset s off
+xset s noblank
+xset -dpms
+
+# Disable GNOME's own idle/lock logic
+gsettings set org.gnome.desktop.session idle-delay 0
+gsettings set org.gnome.desktop.screensaver lock-enabled false
 
 # function to restore brightness and kill mouse script
 cleanup() {
   # stop mouse jiggle
   kill "$MOUSE_PID" 2>/dev/null || true
+
   # restore GNOME backlight to 100%
   gdbus call --session \
     --dest org.gnome.SettingsDaemon.Power \
@@ -21,30 +37,37 @@ cleanup() {
     --method org.freedesktop.DBus.Properties.Set \
       org.gnome.SettingsDaemon.Power.Screen \
       Brightness "<int32 100>"
+
   # restore xrandr brightness
   xrandr --output "$OUTPUT" --brightness 1
+
   exit
 }
 
-# trap Ctrl-C
+# trap Ctrl-C to restore on exit
 trap cleanup SIGINT
 
 # BLANK the screen:
-#  1) set backlight to 0%
+# 1) set GNOME backlight to 0%
 gdbus call --session \
   --dest org.gnome.SettingsDaemon.Power \
   --object-path /org/gnome/SettingsDaemon/Power \
   --method org.freedesktop.DBus.Properties.Set \
     org.gnome.SettingsDaemon.Power.Screen \
     Brightness "<int32 0>"
-#  2) set xrandr brightness to 0
+
+# 2) set xrandr brightness to 0
 xrandr --output "$OUTPUT" --brightness 0
 
-PWD=`pwd`
-# start your mouce.py in background
-python3 $PWD/win_button.py
-python3 $PWD/mouce.py &
+# Store working dir
+PWD=$(pwd)
+
+# Start your key-press helper first (so you can wake with Super)
+python3 "$PWD/win_button.py"
+
+# Start your mouse-jiggle script in background
+python3 "$PWD/mouce.py" &
 MOUSE_PID=$!
 
-# wait here until Ctrl-C
+# Wait here until Ctrl-C
 wait "$MOUSE_PID"
