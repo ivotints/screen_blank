@@ -7,7 +7,7 @@
 if [ -z "$UNDER_INHIBIT" ]; then
   export UNDER_INHIBIT=1
   exec systemd-inhibit \
-    --what=idle:sleep:handle-lid-switch \
+    --what=idle:sleep:handle-lid-switch:handle-power-key:handle-suspend-key:handle-hibernate-key \
     --mode=block \
     --why="Blank screen without lock for interactive session" \
     "$0" "$@"
@@ -24,6 +24,19 @@ xset -dpms
 # Disable GNOME's own idle/lock logic
 gsettings set org.gnome.desktop.session idle-delay 0
 gsettings set org.gnome.desktop.screensaver lock-enabled false
+gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+
+# Additional GNOME settings to prevent auto-logout
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0
+gsettings set org.gnome.desktop.screensaver ubuntu-lock-on-suspend false
+
+# Store original values for restoration
+ORIG_IDLE_DELAY=$(gsettings get org.gnome.desktop.session idle-delay)
+ORIG_LOCK_ENABLED=$(gsettings get org.gnome.desktop.screensaver lock-enabled)
+ORIG_IDLE_ACTIVATION=$(gsettings get org.gnome.desktop.screensaver idle-activation-enabled)
+ORIG_SLEEP_AC=$(gsettings get org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout)
+ORIG_SLEEP_BATTERY=$(gsettings get org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout)
 
 # function to restore brightness and kill mouse script
 cleanup() {
@@ -40,6 +53,13 @@ cleanup() {
 
   # restore xrandr brightness
   xrandr --output "$OUTPUT" --brightness 1
+
+  # restore original GNOME settings
+  gsettings set org.gnome.desktop.session idle-delay "$ORIG_IDLE_DELAY"
+  gsettings set org.gnome.desktop.screensaver lock-enabled "$ORIG_LOCK_ENABLED"
+  gsettings set org.gnome.desktop.screensaver idle-activation-enabled "$ORIG_IDLE_ACTIVATION"
+  gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout "$ORIG_SLEEP_AC"
+  gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout "$ORIG_SLEEP_BATTERY"
 
   exit
 }
@@ -68,6 +88,12 @@ python3 "$PWD/win_button.py"
 # Start your mouse-jiggle script in background
 python3 "$PWD/mouce.py" &
 MOUSE_PID=$!
+
+# Periodically send a key event to prevent any remaining timeouts
+while kill -0 "$MOUSE_PID" 2>/dev/null; do
+  sleep 300  # every 5 minutes
+  python3 "$PWD/win_button.py" >/dev/null 2>&1 || true
+done
 
 # Wait here until Ctrl-C
 wait "$MOUSE_PID"
