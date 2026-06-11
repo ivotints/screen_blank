@@ -1,0 +1,49 @@
+#include <windows.h>
+#include <thread>
+#include <iostream>
+#include <iomanip>
+#include <cstdlib>
+
+int main(int argc, char* argv[]) {
+    double hours = 7.5;
+    if (argc > 1) {
+        hours = std::atof(argv[1]);
+        if (hours <= 0) hours = 7.5;
+    }
+    const int totalSeconds = static_cast<int>(hours * 3600);
+    const int intervalSeconds = 270;     // Key press interval
+    const int reportInterval = 1800;     // 30 minutes in seconds
+
+    INPUT inputDown = {0};
+    inputDown.type = INPUT_KEYBOARD;
+    inputDown.ki.wVk = VK_F15;
+
+    INPUT inputUp = inputDown;
+    inputUp.ki.dwFlags = KEYEVENTF_KEYUP;
+
+    int elapsed = 0;
+    int nextReport = reportInterval;
+
+    std::cout << "Start (" << hours << " hours)" << std::endl;
+    while (elapsed < totalSeconds) {
+        if (SendInput(1, &inputDown, sizeof(INPUT)) != 1) {
+            std::cerr << "Failed to send key-down\n";
+        }
+        if (SendInput(1, &inputUp, sizeof(INPUT)) != 1) {
+            std::cerr << "Failed to send key-up\n";
+        }
+
+        elapsed += intervalSeconds;
+
+        if (elapsed >= nextReport || elapsed >= totalSeconds) {
+            double hoursLeft = (totalSeconds - elapsed) / 3600.0;
+            std::cout << std::fixed << std::setprecision(2)
+                      << "Hours left: " << (hoursLeft > 0 ? hoursLeft : 0) << std::endl;
+            nextReport += reportInterval;
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds));
+    }
+
+    return 0;
+}
